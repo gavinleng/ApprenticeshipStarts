@@ -80,7 +80,7 @@ def download(url, sheet, reqFields, outPath):
             print('reading row ' + str(i))
             ii = 0
             for k in kk:
-                if (not pd.isnull(df.iloc[i, 1])) and (not pd.isnull(df.iloc[i, k])) and (df.iloc[i, 1] != "Total"):
+                if (pd.notnull(df.iloc[i, 1])) and (pd.notnull(df.iloc[i, k])) and (df.iloc[i, 1] != "Total"):
                     ij = 0
                     for jj in ["Under 19", "19-24"]:
                         raw_data[col[0]].append(df.iloc[i, 1])
