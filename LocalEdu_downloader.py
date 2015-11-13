@@ -1,13 +1,16 @@
 __author__ = 'G'
 
-
 import sys
-import urllib
+sys.path.append('../harvesterlib')
+
 import pandas as pd
 import argparse
 import json
-import datetime
-import hashlib
+
+import now
+import openurl
+import datasave as dsave
+
 
 # url = "https://www.gov.uk/government/uploads/system/uploads/attachment_data/file/382956/apprenticeships-starts-by-geography-level-and-age.xls"
 # output_path = "tempAppStarts.csv"
@@ -15,23 +18,21 @@ import hashlib
 # required_indicators = ["2005/06", "2006/07", "2007/08", "2008/09", "2009/10", "2010/11", "2011/12", "2012/13", "2013/14", "2014/15"]
 
 
-def download(url, sheet, reqFields, outPath):
+def download(url, sheet, reqFields, outPath, col, keyCol, digitCheckCol, noDigitRemoveFields):
     yearReq = reqFields
     dName = outPath
 
-    col = ['name', 'year', 'age', 'value', 'pkey']
-
     # open url
-    socket = openurl(url)
+    socket = openurl.openurl(url, logfile, errfile)
 
     # operate this excel file
-    logfile.write(str(now()) + ' excel file loading\n')
+    logfile.write(str(now.now()) + ' excel file loading\n')
     print('excel file loading------')
     xd = pd.ExcelFile(socket)
     df = xd.parse(sheet)
 
     # indicator checking
-    logfile.write(str(now()) + ' indicator checking\n')
+    logfile.write(str(now.now()) + ' indicator checking\n')
     print('indicator checking------')
     for i in range(df.shape[0]):
         yearCol = []
@@ -46,9 +47,9 @@ def download(url, sheet, reqFields, outPath):
             break
 
     if len(yearCol) != len(yearReq):
-        errfile.write(str(now()) + " Requested data " + str(yearReq).strip(
+        errfile.write(str(now.now()) + " Requested data " + str(yearReq).strip(
             '[]') + " don't match the excel file. Please check the file at: " + str(url) + " . End progress\n")
-        logfile.write(str(now()) + ' error and end progress\n')
+        logfile.write(str(now.now()) + ' error and end progress\n')
         sys.exit("Requested data " + str(yearReq).strip(
             '[]') + " don't match the excel file. Please check the file at: " + url)
 
@@ -70,9 +71,9 @@ def download(url, sheet, reqFields, outPath):
     yearCol.pop()
 
     if len(kk) != len(yearReq):
-        errfile.write(str(now()) + " Requested data " + str(yearReq).strip(
+        errfile.write(str(now.now()) + " Requested data " + str(yearReq).strip(
             '[]') + " in the field 'All Apprenticeships' don't match the excel file. Please check the file at: " + str(url) + " . End progress\n")
-        logfile.write(str(now()) + ' error and end progress\n')
+        logfile.write(str(now.now()) + ' error and end progress\n')
         sys.exit("Requested data " + str(yearReq).strip(
             '[]') + " in the field 'All Apprenticeships' don't match the excel file. Please check the file at: " + url)
 
@@ -81,7 +82,7 @@ def download(url, sheet, reqFields, outPath):
         raw_data[j] = []
 
     # data reading
-    logfile.write(str(now()) + ' data reading\n')
+    logfile.write(str(now.now()) + ' data reading\n')
     print('data reading------')
     for i in range(restartIndex, df.shape[0]):
             ii = 0
@@ -97,60 +98,11 @@ def download(url, sheet, reqFields, outPath):
                         ij += 1
 
                 ii += 1
-    logfile.write(str(now()) + ' data reading end\n')
+    logfile.write(str(now.now()) + ' data reading end\n')
     print('data reading end------')
 
-    # create primary key by md5 for each row
-    logfile.write(str(now()) + ' create primary key\n')
-    print('create primary key------')
-    keyCol = [0, 1, 2]
-    raw_data[col[-1]] = fpkey(raw_data, col, keyCol)
-    logfile.write(str(now()) + ' create primary key end\n')
-    print('create primary key end------')
-
     # save csv file
-    logfile.write(str(now()) + ' writing to file\n')
-    print('writing to file ' + dName)
-    dfw = pd.DataFrame(raw_data, columns=col)
-    dfw.to_csv(dName, index=False)
-    logfile.write(str(now()) + ' has been extracted and saved as ' + str(dName) + '\n')
-    print('Requested data has been extracted and saved as ' + dName)
-    logfile.write(str(now()) + ' finished\n')
-    print("finished")
-
-def openurl(url):
-    try:
-        socket = urllib.request.urlopen(url)
-    except urllib.error.HTTPError as e:
-        errfile.write(str(now()) + ' file download HTTPError is ' + str(e.code) + ' . End progress\n')
-        logfile.write(str(now()) + ' error and end progress\n')
-        sys.exit('file download HTTPError = ' + str(e.code))
-    except urllib.error.URLError as e:
-        errfile.write(str(now()) + ' file download URLError is ' + str(e.args) + ' . End progress\n')
-        logfile.write(str(now()) + ' error and end progress\n')
-        sys.exit('file download URLError = ' + str(e.args))
-    except Exception:
-        print('file download error')
-        import traceback
-        errfile.write(str(now()) + ' generic exception: ' + str(traceback.format_exc()) + ' . End progress\n')
-        logfile.write(str(now()) + ' error and end progress\n')
-        sys.exit('generic exception: ' + traceback.format_exc())
-
-    return socket
-
-def fpkey(data, col, keyCol):
-    mystring = ''
-    pkey = []
-    for i in range(len(data[col[0]])):
-        for j in keyCol:
-            mystring += str(data[col[j]][i])
-        mymd5 = hashlib.md5(mystring.encode()).hexdigest()
-        pkey.append(mymd5)
-
-    return pkey
-
-def now():
-    return datetime.datetime.now()
+    dsave.save(raw_data, col, keyCol, digitCheckCol, noDigitRemoveFields, dName, logfile)
 
 
 parser = argparse.ArgumentParser(description='Extract online Apprenticeship Starts Excel file Local Education Authority to .csv file.')
@@ -164,17 +116,21 @@ if args.generateConfig:
         "url": "https://www.gov.uk/government/uploads/system/uploads/attachment_data/file/382956/apprenticeships-starts-by-geography-level-and-age.xls",
         "outPath": "tempAppStarts.csv",
         "sheet": "Local Education Authority",
-        "reqFields": ["2005/06", "2006/07", "2007/08", "2008/09", "2009/10", "2010/11", "2011/12", "2012/13", "2013/14", "2014/15"]
+        "reqFields": ["2005/06", "2006/07", "2007/08", "2008/09", "2009/10", "2010/11", "2011/12", "2012/13", "2013/14", "2014/15"],
+        "colFields": ['name', 'year', 'age', 'value'],
+        "primaryKeyCol": ['name', 'year', 'age'],#[0, 1, 2],
+        "digitCheckCol": ['value'],#[3],
+        "noDigitRemoveFields": []
     }
 
     logfile = open("log_tempAppStarts.log", "w")
-    logfile.write(str(now()) + ' start\n')
+    logfile.write(str(now.now()) + ' start\n')
 
     errfile = open("err_tempAppStarts.err", "w")
 
     with open("config_tempAppStarts.json", "w") as outfile:
         json.dump(obj, outfile, indent=4)
-        logfile.write(str(now()) + ' config file generated and end\n')
+        logfile.write(str(now.now()) + ' config file generated and end\n')
         sys.exit("config file generated")
 
 if args.configFile == None:
@@ -184,11 +140,11 @@ with open(args.configFile) as json_file:
     oConfig = json.load(json_file)
 
     logfile = open('log_' + oConfig["outPath"].split('.')[0] + '.log', "w")
-    logfile.write(str(now()) + ' start\n')
+    logfile.write(str(now.now()) + ' start\n')
 
     errfile = open('err_' + oConfig["outPath"].split('.')[0] + '.err', "w")
 
-    logfile.write(str(now()) + ' read config file\n')
+    logfile.write(str(now.now()) + ' read config file\n')
     print("read config file")
 
-download(oConfig["url"], oConfig["sheet"], oConfig["reqFields"], oConfig["outPath"])
+download(oConfig["url"], oConfig["sheet"], oConfig["reqFields"], oConfig["outPath"], oConfig["colFields"], oConfig["primaryKeyCol"], oConfig["digitCheckCol"], oConfig["noDigitRemoveFields"])
